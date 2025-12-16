@@ -1,0 +1,443 @@
+/* ================= 全局基础 ================= */
+body {
+    background-color: #121212;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+[v-cloak] {
+    display: none;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* ================= 导航栏 & 筛选栏 ================= */
+.navbar {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.navbar-brand {
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+}
+
+.form-control:focus {
+    background-color: #2a2a2a !important;
+    border-color: #0d6efd;
+    color: #fff;
+    box-shadow: none;
+}
+
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0 0.5rem;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* ================= 番剧卡片 ================= */
+.cover-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    border: none !important;
+    background: #1e1e1e !important;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.cover-card:hover {
+    transform: translateY(-5px);
+    z-index: 5;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.poster-box {
+    aspect-ratio: 2/3;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    background: #212529;
+}
+
+.poster-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.cover-card:hover .poster-img {
+    transform: scale(1.05);
+}
+
+.loading-cover-state {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+/* ================= ❤️ 追番爱心标记 ================= */
+.fav-mark {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    /* 👈 这里改回 left，爱心就会回到左上角 */
+    z-index: 10;
+    font-size: 1.2rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.fav-mark:hover {
+    transform: scale(1.2);
+}
+
+/* ================= 独立播放页样式 & 修复核心 ================= */
+.player-container {
+    padding-bottom: 50px;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 🔥🔥🔥 核心修复：强制 Plyr 填满 Bootstrap 的 ratio 容器 🔥🔥🔥 */
+/* 这段代码解决了上面是黑框、播放器跑下面的问题 */
+.ratio .plyr {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.ratio .plyr video {
+    object-fit: contain;
+    /* 保持视频比例，不拉伸 */
+}
+
+/* 侧边栏选集列表 (Grid布局) */
+.episode-grid {
+    display: grid;
+    /* 自动填充，每格最小 55px，自适应宽度 */
+    grid-template-columns: repeat(auto-fill, minmax(55px, 1fr));
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+/* 选集按钮样式 */
+.ep-btn {
+    border: 1px solid #444;
+    background: #2a2a2a;
+    color: #ccc;
+    padding: 8px 0;
+    text-align: center;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.ep-btn:hover {
+    background: #3a3a3a;
+    border-color: #666;
+    color: #fff;
+}
+
+/* 当前播放中 */
+.ep-btn.active {
+    background: #0dcaf0 !important;
+    /* bg-info */
+    border-color: #0dcaf0 !important;
+    color: #000 !important;
+    font-weight: bold;
+    box-shadow: 0 0 8px rgba(13, 202, 240, 0.4);
+}
+
+/* 看过的集数 */
+.ep-btn.watched {
+    color: #888;
+    background: #1a1a1a;
+    border-color: #333;
+    opacity: 0.8;
+}
+
+.ep-btn.watched::after {
+    content: "✓";
+    position: absolute;
+    bottom: 0;
+    right: 2px;
+    font-size: 0.6rem;
+    color: #0dcaf0;
+    line-height: 1;
+}
+
+/* ================= 响应式调整 ================= */
+@media (max-width: 768px) {
+    .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* 播放页在手机上垂直排列 */
+    .player-container .row {
+        flex-direction: column;
+    }
+
+    .episode-grid {
+        max-height: 300px;
+    }
+}
+
+/* ================= 历史记录续播按钮 ================= */
+.resume-btn {
+    border: 1px solid #ffc107;
+    /* 黄色边框，醒目 */
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    transition: all 0.2s;
+    user-select: none;
+    font-weight: bold;
+}
+
+.resume-btn:hover {
+    background: #ffc107;
+    color: #000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.resume-btn small {
+    display: block;
+    font-size: 0.75rem;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
+/* 简单的淡入动画 */
+.fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* ================= 顶部导航美化 (胶囊样式) ================= */
+.nav-pill-group {
+    background: rgba(255, 255, 255, 0.05);
+    /*极其轻微的背景底色*/
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /*微弱的边框*/
+    border-radius: 50px;
+    /* 圆润的胶囊形状 */
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    /* 按钮之间的间距 */
+}
+
+.nav-pill-item {
+    border: none !important;
+    background: transparent;
+    color: #aaa;
+    /* 未选中时的灰色文字 */
+    padding: 6px 16px;
+    border-radius: 40px;
+    /* 按钮本身也是圆的 */
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* 图标和文字的间距 */
+    cursor: pointer;
+}
+
+.nav-pill-item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    /* 鼠标悬停时的微光 */
+}
+
+/* 🔵 蓝色激活状态 (季度/全部) */
+.nav-pill-item.active-blue {
+    background: #0d6efd;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+    /* 蓝色发光阴影 */
+    transform: translateY(-1px);
+    /* 微微上浮 */
+}
+
+/* 🔴 红色激活状态 (我的追番) */
+.nav-pill-item.active-red {
+    background: #dc3545;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+    /* 红色发光阴影 */
+    transform: translateY(-1px);
+}
+
+/* 🟢 绿色激活状态 (观看历史) */
+.nav-pill-item.active-green {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+    /* 绿色发光阴影 */
+    transform: translateY(-1px);
+}
+
+/* ================= 星期栏美化 (胶囊容器) ================= */
+.week-capsule-container {
+    background: rgba(255, 255, 255, 0.05);
+    /* 轻微的背景底色 */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* 微弱的边框 */
+    border-radius: 50px;
+    /* 圆润的胶囊形状 */
+    padding: 6px;
+    /* 内边距，给按钮留空间 */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    /* 按钮之间的间距 */
+    overflow-x: auto;
+    /* 隐藏滚动条 */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+}
+
+.week-capsule-container::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
+}
+
+.week-pill {
+    flex: 0 0 auto;
+    /* 防止被挤压 */
+    border: none;
+    /* 去掉边框，更干净 */
+    background: transparent;
+    /* 默认透明 */
+    color: #aaa;
+    border-radius: 40px;
+    /* 圆润 */
+    padding: 8px 18px;
+    /* 增加内边距，让按钮更舒适 */
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.week-pill:hover {
+    background: rgba(255, 255, 255, 0.1);
+    /* 悬停时的微光 */
+    color: #fff;
+}
+
+/* 选中状态：使用和上方"季度新番"一样的蓝色 */
+.week-pill.active {
+    background: #0d6efd;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
+    /* 蓝色光晕 */
+    transform: translateY(-1px);
+    /* 微微上浮 */
+}
+
+/* 优化选中状态下的数字角标 */
+.week-pill.active .badge {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    color: #fff !important;
+}
+
+/* ================= 番剧介绍区域 ================= */
+.anime-description {
+    margin-top: 40px;
+    /* 增加上边距，与播放器底部对齐 */
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border-left: 3px solid #0d6efd;
+}
+
+.anime-description h6 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.anime-description p {
+    margin: 0;
+    color: #ccc;
+    font-size: 0.8rem;
+}

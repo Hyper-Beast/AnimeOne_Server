@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimeOne</title>
+    <link rel="icon" href="/static/css/favicon.png" type="image/png">
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/plyr.css" />
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div id="app" v-cloak>
+        <div class="container-fluid">
+            <!-- 顶部错误提示 -->
+            <div v-if="errorMsg" class="alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-5"
+                style="z-index: 9999;">{{ errorMsg }}</div>
+
+            <!-- ==================== 列表视图 (首页/排期/追番) ==================== -->
+            <div v-if="mode !== 'player'">
+                <!-- 筛选工具栏 -->
+                <div class="filter-bar mb-4 mt-3"> <!-- 加了 mt-3 补一下顶部间距 -->
+
+                    <!-- 第一行：胶囊导航 + 搜索框 -->
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+
+                        <!-- 1. 胶囊导航组 -->
+                        <div class="nav-pill-group">
+                            <!-- 季度新番 -->
+                            <button class="nav-pill-item" :class="{ 'active-blue': mode === 'schedule' }"
+                                @click="switchMode('schedule')">
+                                📅 季度新番
+                            </button>
+
+                            <!-- 全部番剧 -->
+                            <button class="nav-pill-item" :class="{ 'active-blue': mode === 'home' }"
+                                @click="switchMode('home')">
+                                🏠 全部番剧
+                            </button>
+
+                            <!-- 我的追番 -->
+                            <button class="nav-pill-item" :class="{ 'active-red': mode === 'favorites' }"
+                                @click="switchMode('favorites')">
+                                ❤️ 我的追番
+                            </button>
+
+                            <!-- 观看历史 -->
+                            <button class="nav-pill-item" :class="{ 'active-green': mode === 'history' }"
+                                @click="switchMode('history')">
+                                🕒 观看历史
+                            </button>
+                        </div>
+
+                        <!-- 2. 搜索框 (移到了这里) -->
+                        <div class="d-flex gap-2">
+                            <input class="form-control form-control-sm bg-dark text-light border-secondary"
+                                v-model="searchQuery" @keyup.enter="doSearch" placeholder="搜索..."
+                                style="width: 160px; border-radius: 20px; padding-left: 15px;"> <!-- 变圆润了 -->
+
+                            <button class="btn btn-sm btn-outline-light rounded-circle" @click="doSearch" title="搜索">
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 第二行：季度选择器 (仅在排期模式显示) -->
+                    <div v-if="mode === 'schedule'" class="d-flex gap-2 mt-3 align-items-center flex-wrap">
+                        <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                            style="width:auto; border-radius: 15px;" v-model="selectedYear">
+                            <option v-for="y in years" :key="y" :value="y">{{ y }} 年</option>
+                        </select>
+                        <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                            style="width:auto; border-radius: 15px;" v-model="selectedSeason">
+                            <option value="春季">春季</option>
+                            <option value="夏季">夏季</option>
+                            <option value="秋季">秋季</option>
+                            <option value="冬季">冬季</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary rounded-pill px-3" @click="fetchSchedule">查看</button>
+                    </div>
+                </div>
+
+                <!-- 加载中 -->
+                <div v-if="loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+
+                <!-- 追番空状态 -->
+                <div v-if="mode === 'favorites' && !loading && animeList.length === 0"
+                    class="text-center py-5 text-muted">
+                    <h4>暂无追番</h4>
+                    <button class="btn btn-outline-primary btn-sm mt-2" @click="switchMode('home')">去浏览番剧</button>
+                </div>
+
+                <!-- 历史空状态 -->
+                <div v-if="mode === 'history' && !loading && animeList.length === 0"
+                    class="text-center py-5 text-muted">
+                    <h4>暂无观看记录</h4>
+                    <button class="btn btn-outline-primary btn-sm mt-2" @click="switchMode('home')">去浏览番剧</button>
+                </div>
+
+                <!-- 列表内容区域 -->
+                <div v-if="!loading">
+                    <!-- 星期切换 (仅排期模式) -->
+                    <div v-if="mode === 'schedule'" class="mb-4">
+                        <!-- 🔥 添加胶囊容器包裹 -->
+                        <div class="week-capsule-container">
+                            <button v-for="(day, index) in weekDays" :key="index" class="week-pill"
+                                :class="{ 'active': currentDayTab === index }" @click="currentDayTab = index">
+
+                                {{ day }}
+
+                                <!-- 数字角标 -->
+                                <span class="badge rounded-pill ms-1"
+                                    :class="currentDayTab === index ? '' : 'bg-secondary'">
+                                    {{ weekData[index]?.length || 0 }}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 卡片网格 -->
+                    <div class="row row-cols-3 row-cols-md-4 row-cols-lg-6 g-3">
+                        <div class="col" v-for="anime in (mode === 'schedule' ? weekData[currentDayTab] : animeList)"
+                            :key="anime.id">
+                            <div class="card h-100 cover-card text-light" @click="openDetail(anime)">
+                                <div class="poster-box">
+                                    <div v-if="isFavorited(anime.id)" class="fav-mark">❤️</div>
+                                    <div v-if="anime.posterLoading"
+                                        class="loading-cover-state d-flex justify-content-center align-items-center h-100">
+                                        <div class="spinner-border spinner-border-sm text-secondary"></div>
+                                    </div>
+                                    <img v-else-if="anime.poster && !anime.coverFailed" :src="anime.poster"
+                                        class="poster-img" loading="lazy" @error="handleImageError(anime)">
+                                    <div v-else
+                                        class="loading-cover-state d-flex justify-content-center align-items-center h-100 text-muted fs-4">
+                                        📺</div>
+                                </div>
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-truncate mb-1">{{ anime.title }}</h6>
+
+                                    <!-- 徽章区域（横向排列） -->
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <!-- 状态/年份徽章 -->
+                                        <span class="badge"
+                                            :class="(anime.status && (anime.status.includes('连载') || anime.status.includes('Live'))) ? 'bg-info text-dark' : 'bg-secondary'">
+                                            {{ (anime.status && (anime.status.includes('连载') || anime.status.includes('Live'))) ? anime.status : (anime.year || '未知') }}
+                                        </span>
+
+                                        <!-- 🔥 所有模式下都显示观看进度 -->
+                                        <span v-if="historyList.find(h => String(h.animeId) === String(anime.id))"
+                                            class="badge bg-success text-dark">
+                                            观看至: {{ historyList.find(h => String(h.animeId) ===
+                                            String(anime.id)).episodeTitle }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 🔥 加载更多提示 (无限滚动) -->
+                    <div class="text-center mt-4" v-if="loading && animeList.length > 0">
+                        <div class="spinner-border spinner-border-sm text-secondary"></div>
+                        <span class="text-muted ms-2">加载中...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== 播放页 (独立视图) ==================== -->
+            <div v-if="mode === 'player' && currentAnime" class="player-container fade-in">
+                <div class="row">
+                    <!-- 左侧：播放器区域 (占宽 9/12) -->
+                    <div class="col-lg-9 col-md-12 mb-4">
+                        <!-- ratio 类提供了 16:9 的占位，CSS 补丁将确保播放器在这里面显示 -->
+                        <div class="ratio ratio-16x9 bg-black rounded shadow overflow-hidden">
+                            <video ref="videoPlayer" class="plyr" crossOrigin="anonymous" playsinline></video>
+
+                            <!-- 仅保留加载转圈，其他提示全删 -->
+                            <div v-if="loadingVideo"
+                                class="d-flex align-items-center justify-content-center text-light h-100 position-absolute w-100 top-0"
+                                style="background:rgba(0,0,0,0.6); z-index:10;">
+                                <div class="spinner-border text-info me-2"></div>
+                                <span>视频解析中...</span>
+                            </div>
+                        </div>
+
+                        <!-- 移动端显示的标题和按钮 (PC端隐藏) -->
+                        <div class="d-lg-none mt-2">
+                            <h4 class="fw-bold">{{ currentAnime.title }}</h4>
+                            <button class="btn btn-sm mt-2"
+                                :class="isFavorited(currentAnime.id) ? 'btn-danger' : 'btn-outline-danger'"
+                                @click="toggleFavorite(currentAnime.id)">
+                                {{ isFavorited(currentAnime.id) ? '❤️ 已追番' : '🤍 追番' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：侧边栏 (占宽 3/12) -->
+                    <div class="col-lg-3 col-md-12">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body p-3">
+                                <!-- 1. 标题和播放信息 (位于最上方) -->
+                                <div class="mb-3">
+                                    <h4 class="fw-bold mb-1">{{ currentAnime.title }}</h4>
+                                    <div class="text-muted small">
+                                        <div v-if="currentEp" class="text-info mb-1 fw-bold">
+                                            正在播放: {{ currentEp.full_title }}
+                                        </div>
+                                        <span>{{ currentAnime.year }} {{ currentAnime.season }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- 2. 番剧简报 (海报+状态+追番) -->
+                                <div class="d-flex gap-3 mb-3">
+                                    <div class="flex-shrink-0" style="width: 80px;">
+                                        <img :src="currentAnime.poster || ''" class="img-fluid rounded"
+                                            style="aspect-ratio: 2/3; object-fit: cover;">
+                                    </div>
+                                    <div class="flex-grow-1 d-flex flex-column gap-2"> <!-- 这里改成了 gap-2 以便自动间距 -->
+
+                                        <!-- 状态标签 -->
+                                        <div>
+                                            <span class="badge"
+                                                :class="(currentAnime.status && (currentAnime.status.includes('连载') || currentAnime.status.includes('Live'))) ? 'bg-info text-dark' : 'bg-secondary'">
+                                                {{ (currentAnime.status && (currentAnime.status.includes('连载') || currentAnime.status.includes('Live'))) ? currentAnime.status : (currentAnime.year || '未知') }}
+                                            </span>
+                                        </div>
+
+                                        <!-- 🔥🔥🔥 修改后的：上次播放记录按钮 🔥🔥🔥 -->
+                                        <!-- 条件说明：有记录 且 集数已加载完 且 列表不为空 且 当前未开始播放 -->
+                                        <div v-if="lastWatchedEpisode && !loadingEps && episodes.length > 0 && !currentEp"
+                                            class="resume-btn fade-in" @click="resumePlay">
+                                            上次播放到 [{{ lastWatchedEpisode.title }}] {{
+                                            formatTime(lastWatchedEpisode.time) }}
+                                            <small>点击继续播放 ▶</small>
+                                        </div>
+
+                                        <!-- 追番按钮 -->
+                                        <button class="btn btn-sm w-100"
+                                            :class="isFavorited(currentAnime.id) ? 'btn-danger' : 'btn-outline-danger'"
+                                            @click="toggleFavorite(currentAnime.id)">
+                                            {{ isFavorited(currentAnime.id) ? '❤️ 已追番' : '🤍 追番' }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr class="border-secondary my-3">
+
+                                <!-- 3. 选集列表 -->
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0 fw-bold">选集 ({{ episodes.length }})</h6>
+                                    <button class="btn btn-link btn-sm text-decoration-none text-muted"
+                                        @click="episodes.reverse()">⇅ 倒序</button>
+                                </div>
+
+                                <!-- 状态1: 加载中 -->
+                                <div v-if="loadingEps" class="text-center py-4">
+                                    <div class="spinner-border spinner-border-sm text-secondary"></div>
+                                </div>
+
+                                <!-- 状态2: 加载失败 (新增重试按钮) -->
+                                <div v-else-if="loadingEpsError" class="text-center py-4">
+                                    <p class="small text-danger mb-2">加载失败</p>
+                                    <button class="btn btn-sm btn-outline-warning"
+                                        @click="fetchEpisodes(currentAnime.id)">
+                                        ↻ 重新加载
+                                    </button>
+                                </div>
+
+                                <!-- 状态3: 正常显示 (网格选集区) -->
+                                <div v-else class="episode-grid custom-scrollbar">
+                                    <div v-for="ep in episodes" :key="ep.index" class="ep-btn" :class="{
+                                            'active': currentEp && currentEp.index === ep.index,
+                                            'watched': !currentEp && lastWatchedEpisode && lastWatchedEpisode.title === ep.title
+                                        }" :title="ep.full_title" @click="playEp(ep)">
+                                        {{ ep.title }}
+                                    </div>
+                                </div>
+
+                                <!-- 🔥 番剧介绍区域 (集数加载完成后显示) -->
+                                <div v-if="!loadingEps && episodes.length > 0 && descMap[currentAnime.title]"
+                                    class="anime-description mt-5">
+                                    <h6 class="mb-2 fw-bold text-muted">📖 番剧介绍</h6>
+                                    <p class="small text-light" style="white-space: pre-line; line-height: 1.6;">{{
+                                        descMap[currentAnime.title] }}</p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/vue.global.js"></script>
+    <script src="/static/js/axios.min.js"></script>
+    <script src="/static/js/plyr.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

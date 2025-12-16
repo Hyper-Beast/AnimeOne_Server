@@ -1,0 +1,5 @@
+Flask==3.0.0
+httpx==0.25.2
+beautifulsoup4==4.12.2
+opencc-python-reimplemented==0.1.7
+pypinyin==0.50.0
