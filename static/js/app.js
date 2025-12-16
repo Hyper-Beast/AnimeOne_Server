@@ -64,6 +64,8 @@ createApp({
         const videoPlayer = ref(null);
         let plyrInstance = null;
         let saveTimer = null;
+        let hasTriggeredCompletion = false; // 🔥 全局标志，防止重复触发
+        let shouldSave = true; // 🔥 控制是否允许保存
 
         // 追番和记录
         const favoritesList = ref([]);
@@ -274,20 +276,15 @@ createApp({
         const startSavingProgress = () => {
             if (saveTimer) clearInterval(saveTimer);
             saveTimer = setInterval(() => {
-                if (plyrInstance && !plyrInstance.paused && currentAnime.value && currentEp.value) {
+                if (plyrInstance && !plyrInstance.paused && currentAnime.value && currentEp.value && shouldSave) {
                     const time = plyrInstance.currentTime;
-                    const duration = plyrInstance.duration;
                     if (time > 1) {
                         const animeId = currentAnime.value.id;
                         const epTitle = currentEp.value.title;
                         const position = Math.floor(time);
-                        
-                        // 🔥 如果播放进度超过95%，清除记录
-                        if (duration > 0 && time / duration > 0.95) {
-                            axios.post('/api/playback/clear', { anime_id: animeId }).catch(() => {});
-                        } else {
-                            axios.post('/api/playback/save', { anime_id: animeId, episode_title: epTitle, playback_position: position }).catch(() => { });
-                        }
+
+                        // 🔥 只保存，不清除（清除由 timeupdate 事件处理）
+                        axios.post('/api/playback/save', { anime_id: animeId, episode_title: epTitle, playback_position: position }).catch(() => { });
                     }
                 }
             }, 5000);
@@ -382,11 +379,21 @@ createApp({
 
         // 🔥🔥🔥 终极修复版 playEp (修复跳转失败 + 修复崩溃) 🔥🔥🔥
         const playEp = async (ep, startTime = 0) => {
+            console.log('========== playEp 开始 ==========');
+            console.log('集数:', ep.title);
+            console.log('起始时间:', startTime);
+            console.log('shouldSave:', shouldSave);
+            console.log('hasTriggeredCompletion:', hasTriggeredCompletion);
+
             // ... (前面的自动检测逻辑保持不变)
             currentEp.value = ep;
             // 🔥🔥🔥 新增：修改浏览器标题 🔥🔥🔥
             document.title = `▶ ${ep.title} - ${currentAnime.value.title}`;
             loadingVideo.value = true;
+            // 🔥 重置完成标志
+            hasTriggeredCompletion = false;
+            shouldSave = true; // 🔥 重置保存标志
+            console.log('已重置标志 - shouldSave:', shouldSave, 'hasTriggeredCompletion:', hasTriggeredCompletion);
             // 1. 自动检测历史记录逻辑
             if (startTime === 0 && lastWatchedEpisode.value) {
                 const historyTitle = String(lastWatchedEpisode.value.title).trim();
@@ -403,108 +410,218 @@ createApp({
             currentEp.value = ep;
             loadingVideo.value = true;
             videoUrl.value = "";
-            stopSavingProgress();
-            if (plyrInstance) { plyrInstance.destroy(); plyrInstance = null; }
+            // 🔥 清理旧的播放器
+            console.log('清理旧播放器 - plyrInstance:', plyrInstance);
+            // 🔥 不再销毁播放器 - 保持实例存活，在下面更新源
+            // if (plyrInstance) {
+            //     plyrInstance.destroy();
+            //     plyrInstance = null;
+            //     console.log('已销毁旧播放器');
+            // }
 
             lastWatchedEpisode.value = { title: ep.title, time: startTime };
 
             try {
+                console.log('开始获取播放地址...');
                 let apiUrl = ep.token ? `/api/play_info?token=${encodeURIComponent(ep.token)}` : `/api/play_info?id=${currentAnime.value.id}&ep=${ep.index}`;
+                console.log('API URL:', apiUrl);
                 const res = await axios.get(apiUrl);
+                console.log('API 响应:', res.data);
                 if (res.data.code === 200) {
                     videoUrl.value = res.data.url;
+                    console.log('视频 URL:', videoUrl.value);
                     await nextTick();
+                    console.log('nextTick 完成 - videoPlayer.value:', videoPlayer.value);
                     if (videoPlayer.value) {
-                        // 初始化 Plyr
-                        plyrInstance = new Plyr(videoPlayer.value, {
-                            autoplay: false, // 关闭自动播放，完全手动控制
-                            controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen']
-                        });
+                        // 🔥🔥🔥 关键修复：如果播放器已存在，只更新源；否则创建新实例
+                        if (plyrInstance) {
+                            console.log('播放器已存在，直接更新视频源');
 
-                        // 🚩 关键修改：监听 loadedmetadata 事件 (元数据加载完再跳，最稳)
-                        // 必须在设置 source 之前绑定监听
-                        plyrInstance.on('loadedmetadata', () => {
+                            // 停止当前播放
+                            plyrInstance.stop();
+
+                            // 更新视频源
+                            plyrInstance.source = {
+                                type: 'video',
+                                sources: [{ src: videoUrl.value, type: 'video/mp4' }]
+                            };
+                            console.log('视频源已更新');
+
+                            // 如果需要跳转到指定时间
                             if (startTime > 1) {
-                                console.log(`元数据已加载，执行跳转 -> ${startTime}s`);
-                                plyrInstance.currentTime = startTime;
+                                plyrInstance.once('loadedmetadata', () => {
+                                    console.log('元数据加载完成，跳转到:', startTime);
+                                    plyrInstance.currentTime = startTime;
+                                    plyrInstance.play().catch(e => console.log('自动播放被阻止:', e));
+                                });
+                            } else {
+                                // 从头播放
+                                plyrInstance.once('loadeddata', () => {
+                                    plyrInstance.play().catch(e => console.log('自动播放被阻止:', e));
+                                });
                             }
-                        });
+                        } else {
+                            console.log('首次创建播放器');
 
-                        // 监听 Ready 事件 (主要负责 UI 提示和开始播放)
-                        plyrInstance.on('ready', () => {
-                            // 双重保险：如果 loadedmetadata 没跳成功，这里再试一次
-                            if (startTime > 1 && plyrInstance.currentTime < 1) {
-                                plyrInstance.currentTime = startTime;
-                            }
+                            // 🔥 关键修复：确保 video 元素干净
+                            const videoElement = videoPlayer.value;
+                            videoElement.removeAttribute('src');
+                            videoElement.load(); // 重置 video 元素
 
-                            if (startTime > 1) {
-                                // 显示提示 (已修复崩溃问题)
-                                const toast = document.createElement('div');
-                                toast.innerText = `将为您跳转至 ${formatTime(startTime)}`;
-                                toast.style.cssText = "position:absolute; top:10%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:white; padding:5px 15px; border-radius:20px; z-index:99; font-size:14px; pointer-events:none; transition: opacity 0.5s;";
+                            // 初始化 Plyr
+                            plyrInstance = new Plyr(videoElement, {
+                                autoplay: false,
+                                controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'],
+                                resetOnEnd: false,
+                                hideControls: false, // 🔥 确保控件不会自动隐藏
+                                clickToPlay: true
+                            });
+                            console.log('Plyr 实例已创建:', plyrInstance);
 
-                                if (plyrInstance && plyrInstance.elements && plyrInstance.elements.container) {
-                                    plyrInstance.elements.container.appendChild(toast);
+                            // 🚩 关键修改：监听 loadedmetadata 事件 (元数据加载完再跳，最稳)
+                            // 必须在设置 source 之前绑定监听
+                            plyrInstance.on('loadedmetadata', () => {
+                                if (startTime > 1) {
+                                    console.log(`元数据已加载，执行跳转 -> ${startTime}s`);
+                                    plyrInstance.currentTime = startTime;
                                 }
-                                setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
-                            }
+                            });
 
-                            // 尝试播放
-                            try {
-                                const playPromise = plyrInstance.play();
-                                if (playPromise !== undefined) {
-                                    playPromise.catch(e => console.log("自动播放需用户交互:", e));
+                            // 监听 Ready 事件 (主要负责 UI 提示和开始播放)
+                            plyrInstance.on('ready', () => {
+                                // 双重保险：如果 loadedmetadata 没跳成功，这里再试一次
+                                if (startTime > 1 && plyrInstance.currentTime < 1) {
+                                    plyrInstance.currentTime = startTime;
                                 }
-                            } catch (e) { }
-                        });
 
-                        // 最后再设置源，触发加载
-                        plyrInstance.source = { type: 'video', sources: [{ src: videoUrl.value, type: 'video/mp4' }] };
-
-                        // 🔥 监听播放完成事件
-                        plyrInstance.on('ended', async () => {
-                            console.log('视频播放完成');
-                            
-                            // 清除播放记录
-                            try {
-                                await axios.post('/api/playback/clear', { anime_id: currentAnime.value.id });
-                                console.log('已清除播放记录');
-                            } catch (e) {
-                                console.error('清除记录失败:', e);
-                            }
-
-                            // 检查是否有下一集
-                            const currentIndex = episodes.value.findIndex(e => e.title === currentEp.value.title);
-                            if (currentIndex !== -1) {
-                                // 🔥 注意：列表是倒序的（最新集在前），所以下一集是 index - 1
-                                const nextIndex = currentIndex - 1;
-                                
-                                if (nextIndex >= 0 && nextIndex < episodes.value.length) {
-                                    const nextEpisode = episodes.value[nextIndex];
-                                    
-                                    // 显示提示
+                                if (startTime > 1) {
+                                    // 显示提示 (已修复崩溃问题)
                                     const toast = document.createElement('div');
-                                    toast.innerText = `即将播放下一集: ${nextEpisode.title}`;
-                                    toast.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.9); color:white; padding:20px 40px; border-radius:10px; z-index:9999; font-size:18px; font-weight:bold;";
-                                    document.body.appendChild(toast);
-                                    
-                                    // 1秒后自动播放下一集
-                                    setTimeout(() => {
-                                        toast.remove();
-                                        playEp(nextEpisode, 0);
-                                    }, 1000);
-                                } else {
-                                    // 没有下一集了
-                                    const toast = document.createElement('div');
-                                    toast.innerText = '已播放完所有集数';
-                                    toast.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.9); color:white; padding:20px 40px; border-radius:10px; z-index:9999; font-size:18px; font-weight:bold;";
-                                    document.body.appendChild(toast);
-                                    setTimeout(() => toast.remove(), 3000);
-                                }
-                            }
-                        });
+                                    toast.innerText = `将为您跳转至 ${formatTime(startTime)}`;
+                                    toast.style.cssText = "position:absolute; top:10%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:white; padding:5px 15px; border-radius:20px; z-index:99; font-size:14px; pointer-events:none; transition: opacity 0.5s;";
 
-                        startSavingProgress();
+                                    if (plyrInstance && plyrInstance.elements && plyrInstance.elements.container) {
+                                        plyrInstance.elements.container.appendChild(toast);
+                                    }
+                                    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
+                                }
+
+                                // 尝试播放
+                                try {
+                                    const playPromise = plyrInstance.play();
+                                    if (playPromise !== undefined) {
+                                        playPromise.catch(e => console.log("自动播放需用户交互:", e));
+                                    }
+                                } catch (e) { }
+                            });
+
+                            // 最后再设置源，触发加载
+                            console.log('设置视频源...');
+                            plyrInstance.source = { type: 'video', sources: [{ src: videoUrl.value, type: 'video/mp4' }] };
+                            console.log('视频源已设置');
+
+                            // 🔥 监听播放进度，提前检测即将播完
+                            plyrInstance.on('timeupdate', () => {
+                                if (hasTriggeredCompletion) return; // 🔥 使用全局标志
+
+                                const currentTime = plyrInstance.currentTime;
+                                const duration = plyrInstance.duration;
+                                const remaining = duration - currentTime;
+
+                                // 🔥 剩余时间 <= 10秒时触发（因为每10秒保存一次）
+                                if (remaining > 0 && remaining <= 10) {
+                                    hasTriggeredCompletion = true; // 🔥 设置全局标志
+                                    handleVideoCompletion();
+                                }
+                            });
+
+                            // 🔥 视频播放完成处理函数
+                            const handleVideoCompletion = async () => {
+                                console.log('视频即将播放完成');
+
+                                // 🔥 禁止继续保存，但不停止 saveTimer
+                                shouldSave = false;
+
+                                // 清除播放记录
+                                try {
+                                    await axios.post('/api/playback/clear', { anime_id: currentAnime.value.id });
+                                    console.log('已清除播放记录');
+                                } catch (e) {
+                                    console.error('清除记录失败:', e);
+                                }
+
+                                // 检查是否有下一集
+                                const currentIndex = episodes.value.findIndex(e => e.title === currentEp.value.title);
+                                console.log('当前集数索引:', currentIndex);
+                                console.log('总集数:', episodes.value.length);
+                                if (currentIndex !== -1) {
+                                    // 🔥 注意：列表是倒序的（最新集在前），所以下一集是 index - 1
+                                    const nextIndex = currentIndex - 1;
+
+                                    if (nextIndex >= 0 && nextIndex < episodes.value.length) {
+                                        const nextEpisode = episodes.value[nextIndex];
+                                        console.log('找到下一集:', nextEpisode.title, '索引:', nextIndex);
+
+                                        // 🔥 立即显示提示（而不是等播完）
+                                        const toast = document.createElement('div');
+                                        toast.innerText = `即将播放下一集: ${nextEpisode.title}`;
+                                        toast.style.cssText = "position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.75); color:white; padding:15px 30px; border-radius:8px; z-index:99999; font-size:16px; font-weight:bold; pointer-events:none; transition:opacity 0.3s;";
+
+                                        // 🔥 添加到 Plyr 容器而不是 body，这样全屏时也能看到
+                                        if (plyrInstance && plyrInstance.elements && plyrInstance.elements.container) {
+                                            plyrInstance.elements.container.appendChild(toast);
+                                        } else {
+                                            document.body.appendChild(toast);
+                                        }
+                                        console.log('显示提示:', nextEpisode.title);
+
+                                        // 🔥 3秒后自动淡出提示
+                                        setTimeout(() => {
+                                            toast.style.opacity = '0';
+                                            setTimeout(() => {
+                                                if (toast.parentNode) toast.remove();
+                                            }, 300);
+                                        }, 3000);
+
+                                        // 等待视频播完（最多10秒）
+                                        const startTime = Date.now();
+                                        const checkInterval = setInterval(() => {
+                                            const elapsed = (Date.now() - startTime) / 1000;
+
+                                            // 检查视频是否还在播放
+                                            const remaining = plyrInstance ? (plyrInstance.duration - plyrInstance.currentTime) : 0;
+
+                                            if (remaining <= 0 || elapsed >= 10) {
+                                                clearInterval(checkInterval);
+                                                // 🔥 不需要手动移除 toast，它会自动消失
+                                                console.log('开始播放下一集:', nextEpisode.title);
+
+                                                // 🔥 确保播放下一集
+                                                try {
+                                                    playEp(nextEpisode, 0);
+                                                } catch (e) {
+                                                    console.error('播放下一集失败:', e);
+                                                    showError('播放下一集失败');
+                                                }
+                                            }
+                                        }, 100);
+                                    } else {
+                                        // 没有下一集了
+                                        const toast = document.createElement('div');
+                                        toast.innerText = '已播放完所有集数';
+                                        toast.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.9); color:white; padding:20px 40px; border-radius:10px; z-index:99999; font-size:18px; font-weight:bold;";
+                                        document.body.appendChild(toast);
+                                        setTimeout(() => toast.remove(), 3000);
+                                    }
+                                }
+                            };
+
+                            startSavingProgress();
+                            console.log('========== playEp 完成 ==========');
+                        }
+                    } else {
+                        console.error('❗ videoPlayer.value 为 null，无法初始化播放器');
+                        showError('播放器初始化失败');
                     }
                 } else { showError("播放失败: " + res.data.msg); }
             } catch (e) { showError("解析超时"); } finally { loadingVideo.value = false; }
