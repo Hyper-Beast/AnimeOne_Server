@@ -31,13 +31,11 @@ if not os.path.exists(COVER_FOLDER):
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(BASE_DIR, "static", "json", "cover_map.json")
-MANUAL_FIXES_FILE = os.path.join(BASE_DIR, "static", "json", "manual_fixes.json")
 DESC_FILE = os.path.join(BASE_DIR, "static", "json", "desc_map.json")
 
 ANIME_DB = []
 COVER_MAP = {}
 DESC_MAP = {}
-MANUAL_FIXES = {}
 SCHEDULE_CACHE = {}
 FAVORITES_CACHE = []
 PLAYBACK_CACHE = {}
@@ -53,7 +51,7 @@ client = httpx.Client(headers=HEADERS, timeout=15.0, follow_redirects=True)
 
 # ================= 数据加载 =================
 def load_data():
-    global COVER_MAP, DESC_MAP, MANUAL_FIXES, SCHEDULE_CACHE, FAVORITES_CACHE, PLAYBACK_CACHE
+    global COVER_MAP, DESC_MAP, SCHEDULE_CACHE, FAVORITES_CACHE, PLAYBACK_CACHE
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, 'r', encoding='utf-8') as f:
@@ -691,7 +689,7 @@ def api_list_playback():
 # ================= 定时任务 =================
 def reload_static_data():
     """重新加载静态数据（封面、手动修正、季度表、介绍）"""
-    global COVER_MAP, DESC_MAP, MANUAL_FIXES, SCHEDULE_CACHE
+    global COVER_MAP, DESC_MAP, SCHEDULE_CACHE
     print("[INFO] 重新加载静态数据...", flush=True)
     
     if os.path.exists(CACHE_FILE):
@@ -709,14 +707,6 @@ def reload_static_data():
             print(f"[SUCCESS] 介绍映射已更新: {len(DESC_MAP)} 条", flush=True)
         except Exception as e:
             print(f"[ERROR] 加载介绍映射失败: {e}", flush=True)
-    
-    if os.path.exists(MANUAL_FIXES_FILE):
-        try:
-            with open(MANUAL_FIXES_FILE, 'r', encoding='utf-8') as f:
-                MANUAL_FIXES = json.load(f)
-            print(f"[SUCCESS] 手动修正已更新: {len(MANUAL_FIXES)} 条", flush=True)
-        except Exception as e:
-            print(f"[ERROR] 加载手动修正失败: {e}", flush=True)
     
     schedule_file = os.path.join(BASE_DIR, "static", "json", "schedule.json")
     if os.path.exists(schedule_file):
