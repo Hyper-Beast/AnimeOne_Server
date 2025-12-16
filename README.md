@@ -2,7 +2,8 @@
 
 > 基于 Flask 的动漫资源聚合服务器，为 AnimeOne TV 应用提供 API 支持
 > 提供网页端界面，地址为[http://localhost:5000](http://localhost:5000)
-> <img width="1905" height="888" alt="image" src="https://github.com/user-attachments/assets/3b413039-5b68-4513-a3dd-e21e7aef4068" />
+<img width="1915" height="900" alt="image" src="https://github.com/user-attachments/assets/bd5d5708-d596-4727-b19c-11daf99cd335" />
+
 
 
 ## 功能特性
