@@ -72,48 +72,6 @@ docker run -d \
   animeone-server
 ```
 
-## API 文档
-
-### 番剧列表
-
-```http
-GET /api/list?page=1&q=关键词
-```
-
-### 季度新番
-
-```http
-GET /api/season_schedule?year=2024&season=秋季
-```
-
-### 集数列表
-
-```http
-GET /api/episodes?id=番剧ID
-```
-
-### 播放信息
-
-```http
-GET /api/play_info?token=播放令牌
-```
-
-### 追番管理
-
-```http
-POST /api/favorites/add
-GET  /api/favorites/list
-POST /api/favorites/remove
-```
-
-### 播放记录
-
-```http
-POST /api/playback/save
-GET  /api/playback/list
-GET  /api/playback/get/:anime_id
-```
-
 ## 配置说明
 
 在 `app.py` 中可以修改以下配置：
