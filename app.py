@@ -59,13 +59,7 @@ def load_data():
         except:
             COVER_MAP = {}
     
-    if os.path.exists(MANUAL_FIXES_FILE):
-        try:
-            with open(MANUAL_FIXES_FILE, 'r', encoding='utf-8') as f:
-                MANUAL_FIXES = json.load(f)
-        except:
-            MANUAL_FIXES = {}
-    
+
     if os.path.exists(DESC_FILE):
         try:
             with open(DESC_FILE, 'r', encoding='utf-8') as f:

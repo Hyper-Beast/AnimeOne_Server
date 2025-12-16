@@ -276,11 +276,18 @@ createApp({
             saveTimer = setInterval(() => {
                 if (plyrInstance && !plyrInstance.paused && currentAnime.value && currentEp.value) {
                     const time = plyrInstance.currentTime;
+                    const duration = plyrInstance.duration;
                     if (time > 1) {
                         const animeId = currentAnime.value.id;
                         const epTitle = currentEp.value.title;
                         const position = Math.floor(time);
-                        axios.post('/api/playback/save', { anime_id: animeId, episode_title: epTitle, playback_position: position }).catch(() => { });
+                        
+                        // 🔥 如果播放进度超过95%，清除记录
+                        if (duration > 0 && time / duration > 0.95) {
+                            axios.post('/api/playback/clear', { anime_id: animeId }).catch(() => {});
+                        } else {
+                            axios.post('/api/playback/save', { anime_id: animeId, episode_title: epTitle, playback_position: position }).catch(() => { });
+                        }
                     }
                 }
             }, 5000);
@@ -453,6 +460,49 @@ createApp({
 
                         // 最后再设置源，触发加载
                         plyrInstance.source = { type: 'video', sources: [{ src: videoUrl.value, type: 'video/mp4' }] };
+
+                        // 🔥 监听播放完成事件
+                        plyrInstance.on('ended', async () => {
+                            console.log('视频播放完成');
+                            
+                            // 清除播放记录
+                            try {
+                                await axios.post('/api/playback/clear', { anime_id: currentAnime.value.id });
+                                console.log('已清除播放记录');
+                            } catch (e) {
+                                console.error('清除记录失败:', e);
+                            }
+
+                            // 检查是否有下一集
+                            const currentIndex = episodes.value.findIndex(e => e.title === currentEp.value.title);
+                            if (currentIndex !== -1) {
+                                // 🔥 注意：列表是倒序的（最新集在前），所以下一集是 index - 1
+                                const nextIndex = currentIndex - 1;
+                                
+                                if (nextIndex >= 0 && nextIndex < episodes.value.length) {
+                                    const nextEpisode = episodes.value[nextIndex];
+                                    
+                                    // 显示提示
+                                    const toast = document.createElement('div');
+                                    toast.innerText = `即将播放下一集: ${nextEpisode.title}`;
+                                    toast.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.9); color:white; padding:20px 40px; border-radius:10px; z-index:9999; font-size:18px; font-weight:bold;";
+                                    document.body.appendChild(toast);
+                                    
+                                    // 1秒后自动播放下一集
+                                    setTimeout(() => {
+                                        toast.remove();
+                                        playEp(nextEpisode, 0);
+                                    }, 1000);
+                                } else {
+                                    // 没有下一集了
+                                    const toast = document.createElement('div');
+                                    toast.innerText = '已播放完所有集数';
+                                    toast.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.9); color:white; padding:20px 40px; border-radius:10px; z-index:9999; font-size:18px; font-weight:bold;";
+                                    document.body.appendChild(toast);
+                                    setTimeout(() => toast.remove(), 3000);
+                                }
+                            }
+                        });
 
                         startSavingProgress();
                     }
