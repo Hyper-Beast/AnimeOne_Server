@@ -1,5 +1,5 @@
 # AnimeOne 后端服务
-
+本项目全部代码均为AI编写(包括此readme.md的大部分内容)
 > 基于 Flask 的动漫资源聚合服务器，为 AnimeOne TV 应用提供 API 支持
 > 提供网页端界面，地址为[http://localhost:5000](http://localhost:5000)
 <img width="1915" height="900" alt="image" src="https://github.com/user-attachments/assets/bd5d5708-d596-4727-b19c-11daf99cd335" />
